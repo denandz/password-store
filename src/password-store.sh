@@ -17,6 +17,8 @@ EXTENSIONS="${PASSWORD_STORE_EXTENSIONS_DIR:-$PREFIX/.extensions}"
 X_SELECTION="${PASSWORD_STORE_X_SELECTION:-clipboard}"
 CLIP_TIME="${PASSWORD_STORE_CLIP_TIME:-45}"
 GENERATED_LENGTH="${PASSWORD_STORE_GENERATED_LENGTH:-25}"
+GENERATED_PHRASE_LENGTH="${PASSWORD_STORE_GENERATED_PHRASE_LENGTH:-6}"
+WORDLIST="${PASSWORD_STORE_PHRASE_WORDLIST:-/usr/share/dict/words}"
 CHARACTER_SET="${PASSWORD_STORE_CHARACTER_SET:-[:punct:][:alnum:]}"
 CHARACTER_SET_NO_SYMBOLS="${PASSWORD_STORE_CHARACTER_SET_NO_SYMBOLS:-[:alnum:]}"
 
@@ -293,11 +295,12 @@ cmd_usage() {
 	        overwriting existing password unless forced.
 	    $PROGRAM edit pass-name
 	        Insert a new password or edit an existing password using ${EDITOR:-vi}.
-	    $PROGRAM generate [--no-symbols,-n] [--clip,-c] [--in-place,-i | --force,-f] pass-name [pass-length]
+	    $PROGRAM generate [--no-symbols,-n] [--clip,-c] [--qrcode,-q] [--phrase,-p] [--in-place,-i | --force,-f] pass-name [pass-length]
 	        Generate a new password of pass-length (or $GENERATED_LENGTH if unspecified) with optionally no symbols.
 	        Optionally put it on the clipboard and clear board after $CLIP_TIME seconds.
 	        Prompt before overwriting existing password unless forced.
 	        Optionally replace only the first line of an existing file with a new password.
+	        Optionally generate a pass phrase with pass-length number of words (or $GENERATED_PHRASE_LENGTH if unspecified).
 	    $PROGRAM rm [--recursive,-r] [--force,-f] pass-name
 	        Remove existing password or directory, optionally forcefully.
 	    $PROGRAM mv [--force,-f] old-path new-path
@@ -508,12 +511,13 @@ cmd_edit() {
 }
 
 cmd_generate() {
-	local opts qrcode=0 clip=0 force=0 characters="$CHARACTER_SET" inplace=0 pass
-	opts="$($GETOPT -o nqcif -l no-symbols,qrcode,clip,in-place,force -n "$PROGRAM" -- "$@")"
+	local opts qrcode=0 clip=0 force=0 characters="$CHARACTER_SET" phrase=0 inplace=0 pass
+	opts="$($GETOPT -o npqcif -l no-symbols,phrase,qrcode,clip,in-place,force -n "$PROGRAM" -- "$@")"
 	local err=$?
 	eval set -- "$opts"
 	while true; do case $1 in
 		-n|--no-symbols) characters="$CHARACTER_SET_NO_SYMBOLS"; shift ;;
+		-p|--phrase) phrase=1; shift ;;
 		-q|--qrcode) qrcode=1; shift ;;
 		-c|--clip) clip=1; shift ;;
 		-f|--force) force=1; shift ;;
@@ -521,9 +525,15 @@ cmd_generate() {
 		--) shift; break ;;
 	esac done
 
-	[[ $err -ne 0 || ( $# -ne 2 && $# -ne 1 ) || ( $force -eq 1 && $inplace -eq 1 ) || ( $qrcode -eq 1 && $clip -eq 1 ) ]] && die "Usage: $PROGRAM $COMMAND [--no-symbols,-n] [--clip,-c] [--qrcode,-q] [--in-place,-i | --force,-f] pass-name [pass-length]"
+	[[ $err -ne 0 || ( $# -ne 2 && $# -ne 1 ) || ( $force -eq 1 && $inplace -eq 1 ) || ( $qrcode -eq 1 && $clip -eq 1 ) ]] && die "Usage: $PROGRAM $COMMAND [--no-symbols,-n] [--clip,-c] [--qrcode,-q] [--phrase,-p] [--in-place,-i | --force,-f] pass-name [pass-length]"
 	local path="$1"
-	local length="${2:-$GENERATED_LENGTH}"
+
+        if [[ $phrase -eq 1 ]]; then
+            local length="${2:-$GENERATED_PHRASE_LENGTH}"
+        else
+            local length="${2:-$GENERATED_LENGTH}"
+        fi
+
 	check_sneaky_paths "$path"
 	[[ $length =~ ^[0-9]+$ ]] || die "Error: pass-length \"$length\" must be a number."
 	[[ $length -gt 0 ]] || die "Error: pass-length must be greater than zero."
@@ -534,8 +544,33 @@ cmd_generate() {
 
 	[[ $inplace -eq 0 && $force -eq 0 && -e $passfile ]] && yesno "An entry already exists for $path. Overwrite it?"
 
-	read -r -n $length pass < <(LC_ALL=C tr -dc "$characters" < /dev/urandom)
-	[[ ${#pass} -eq $length ]] || die "Could not generate password from /dev/urandom."
+	if [[ $phrase -eq 0 ]]; then
+		read -r -n $length pass < <(LC_ALL=C tr -dc "$characters" < /dev/urandom)
+	else
+		i=0
+
+		[[ -f "$WORDLIST" ]] || die "Error: $WORDLIST does not exist"
+
+		# We want to ignore words with symbols (like "Mike's") and strip
+		# UTF-8 like "épée".
+		words=`grep '^[A-Za-z]*$' $WORDLIST | grep -v -P '[\x80-\xFF]' | tr '[:upper:]' '[:lower:]'`
+		wordcount=`wc -l <<< $words`
+		tmp_phrase=""
+		[[ ! -z $words ]] || die "Error: could not read wordlist"
+
+		while [ $i -lt $length ]
+		do
+			random_number=$(( ( RANDOM % wordcount) + 1 ))
+			tmp_phrase="$tmp_phrase$(sed `echo $random_number`"q;d" <<< $words| tr -d '\n')"
+			# insert a space between words, unless this is the last loop
+			[[ $(($i+1)) -eq $length ]] || tmp_phrase="$tmp_phrase "
+			let "i = i + 1"
+		done
+
+		pass=$tmp_phrase
+	fi
+
+	[[ ( ${#pass} -eq $length || ( $phrase -gt 0 && ${#pass} -gt $length ) ) ]] || die "Could not generate password from /dev/urandom."
 	if [[ $inplace -eq 0 ]]; then
 		echo "$pass" | $GPG -e "${GPG_RECIPIENT_ARGS[@]}" -o "$passfile" "${GPG_OPTS[@]}" || die "Password encryption aborted."
 	else

@@ -124,7 +124,7 @@ ensure that temporary files are created in \fI/dev/shm\fP in order to avoid writ
 difficult-to-erase disk sectors. If \fI/dev/shm\fP is not accessible, fallback to
 the ordinary \fITMPDIR\fP location, and print a warning.
 .TP
-\fBgenerate\fP [ \fI--no-symbols\fP, \fI-n\fP ] [ \fI--clip\fP, \fI-c\fP ] [ \fI--in-place\fP, \fI-i\fP | \fI--force\fP, \fI-f\fP ] \fIpass-name [pass-length]\fP
+\fBgenerate\fP [ \fI--no-symbols\fP, \fI-n\fP ] [ \fI--clip\fP, \fI-c\fP ] [ \fI--phrase\fP, \fI-p\fP ] [ \fI--in-place\fP, \fI-i\fP | \fI--force\fP, \fI-f\fP ] \fIpass-name [pass-length]\fP
 Generate a new password using \fB/dev/urandom\fP of length \fIpass-length\fP
 (or \fIPASSWORD_STORE_GENERATED_LENGTH\fP if unspecified) and insert into
 \fIpass-name\fP. If \fI--no-symbols\fP or \fI-n\fP is specified, do not use
@@ -142,7 +142,9 @@ or \fI-q\fP is specified, do not print the password but instead display a QR cod
 either to the terminal or graphically if supported. Prompt before overwriting an existing password,
 unless \fI--force\fP or \fI-f\fP is specified. If \fI--in-place\fP or \fI-i\fP is
 specified, do not interactively prompt, and only replace the first line of the password
-file with the new generated password, keeping the remainder of the file intact.
+file with the new generated password, keeping the remainder of the file intact. If \fl--phrase\fP is
+specified, generate a pass phrase with \flpass-length\fp (or
+\flPASSWORD_STORE_GENERATED_PHRASE_LENGTH\fP if unspecified) number of words.
 .TP
 \fBrm\fP [ \fI--recursive\fP, \fI-r\fP ] [ \fI--force\fP, \fI-f\fP ] \fIpass-name\fP
 Remove the password named \fIpass-name\fP from the password store. This command is
@@ -285,6 +287,13 @@ Generate new alphanumeric password
 The generated password to Email/jasondonenfeld.com is: 
 .br
 YqFsMkBeO6di
+.TP
+Generate new pass phrase
+.B zx2c4@laptop ~ $ pass generate -n Email/jasondonenfeld.com -p
+.br
+The generated password for Email/jasondonenfeld.com is:
+.br
+clingier dry rios amphitheatres fulton dangle
 .TP
 Generate new password and copy it to the clipboard
 .B zx2c4@laptop ~ $ pass generate -c Email/jasondonenfeld.com 19
@@ -435,6 +444,14 @@ Sets the umask of all files modified by pass, by default \fI077\fP.
 .I PASSWORD_STORE_GENERATED_LENGTH
 The default password length if the \fIpass-length\fP parameter to \fBgenerate\fP
 is unspecified.
+.TP
+.I PASSWORD_STORE_GENERATED_PHRASE_LENGTH
+The default number of words in a generated pass phrase if the \fIpass-length\fP
+parameter to \fBgenerate\fP is unspecified.
+.TP
+.I PASSWORD_STORE_PHRASE_WORDLIST
+The default wordlist to use when randomly generating pass phrases with
+\fBgenerate\fP.
 .TP
 .I PASSWORD_STORE_CHARACTER_SET
 The character set to be used in password generation for \fBgenerate\fP. This value

@@ -54,6 +54,8 @@ _pass () {
 					"--clip[copy password to the clipboard]" \
 					"-f[force overwrite]" \
 					"--force[force overwrite]" \
+					"-p[generate wordy pass phrase]" \
+					"--phrase[generate wordy pass phrase]" \
 					"-i[replace first line]" \
 					"--in-place[replace first line]"
 				_pass_complete_entries_with_subdirs
